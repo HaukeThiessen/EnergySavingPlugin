@@ -1,0 +1,24 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.5",
+	"FriendlyName": "Energy Saving",
+	"Description": "Helps to save energy by reducing max fps and screen percentage when no input is detected or the window loses focus. Borrows heavily from Fortnite's energy saving mode implementation.",
+	"Category": "Runtime",
+	"CreatedBy": "Hauke Thiessen",
+	"CreatedByURL": "haukethiessen.com",
+	"DocsURL": "",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"CanContainContent": false,
+	"IsBetaVersion": true,
+	"IsExperimentalVersion": false,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "EnergySaving",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	]
+}
