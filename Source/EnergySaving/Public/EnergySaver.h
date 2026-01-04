@@ -26,9 +26,16 @@ public:
 
 private:
 	float LastInteractionTime = 0.0;
+
 	float MaxScreenPercentageToRestore;
 	float MaxFpsToRestore;
+	bool bWorldRenderingToRestore;
+
 	bool bPrevEnergySavingEnabled;
+	bool bPrevRenderingDisabled;
+
 	bool bEnergySavingEnabled;
+	bool bRenderingDisabled;
+
 	bool bInitialized = false;
 };

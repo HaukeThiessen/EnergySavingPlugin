@@ -1,17 +1,32 @@
 #include "EnergySaver.h"
+#include "Kismet/GameplayStatics.h"
 
-float GEnergySaverInactivityTimePluggedIn = 30;
-static FAutoConsoleVariableRef CVarEnergySaverInactivityTimePluggedIn(
-	TEXT("EnergySaver.InactivityTime.PluggedIn"),
-	GEnergySaverInactivityTimePluggedIn,
+float GEnergySaverTimeThresholdForEnergySavingPluggedIn = 30;
+static FAutoConsoleVariableRef CVarEnergySaverTimeThresholdForEnergySavingPluggedIn(
+	TEXT("EnergySaver.TimeThresholdForEnergySaving.PluggedIn"),
+	GEnergySaverTimeThresholdForEnergySavingPluggedIn,
 	TEXT("Idle time threshold at which energy saving kicks in while the device is plugged in (seconds). Set to 0 to disable"),
 	ECVF_Default);
 
-float GEnergySaverInactivityTimeOnBattery = 10;
-static FAutoConsoleVariableRef CVarEnergySaverInactivityTimeOnBattery(
-	TEXT("EnergySaver.InactivityTime.OnBattery"),
-	GEnergySaverInactivityTimeOnBattery,
+float GEnergySaverTimeThresholdForEnergySavingOnBattery = 10;
+static FAutoConsoleVariableRef CVarEnergySaverTimeThresholdForEnergySavingOnBattery(
+	TEXT("EnergySaver.TimeThresholdForEnergySaving.OnBattery"),
+	GEnergySaverTimeThresholdForEnergySavingOnBattery,
 	TEXT("Idle time threshold at which energy saving kicks in while running on battery (seconds). Set to 0 to disable"),
+	ECVF_Default);
+
+float GEnergySaverTimeThresholdForDisabledRenderingPluggedIn = 300;
+static FAutoConsoleVariableRef CVarEnergySaverTimeThresholdForDisabledRenderingPluggedIn(
+	TEXT("EnergySaver.TimeThresholdForDisabledRendering.PluggedIn"),
+	GEnergySaverTimeThresholdForDisabledRenderingPluggedIn,
+	TEXT("Idle time threshold at which the rendering gets disabled while the device is plugged in (seconds). Set to 0 to disable"),
+	ECVF_Default);
+
+float GEnergySaverTimeThresholdForDisabledRenderingOnBattery = 60;
+static FAutoConsoleVariableRef CVarEnergySaverTimeThresholdForDisabledRenderingOnBattery(
+	TEXT("EnergySaver.TimeThresholdForDisabledRendering.OnBattery"),
+	GEnergySaverTimeThresholdForDisabledRenderingOnBattery,
+	TEXT("Idle time threshold at which the rendering gets disabled while running on battery (seconds). Set to 0 to disable"),
 	ECVF_Default);
 
 int32 GEnergySaverMaxFps = 30;
@@ -71,22 +86,55 @@ void UEnergySaver::Deinitialize()
 
 void UEnergySaver::Tick(float DeltaTime)
 {
-	const bool bIsRunningOnBattery = FPlatformMisc::IsRunningOnBattery();
-	const float Threshold = bIsRunningOnBattery ? GEnergySaverInactivityTimeOnBattery : GEnergySaverInactivityTimePluggedIn;
-	bPrevEnergySavingEnabled = bEnergySavingEnabled;
+	const bool bIsRunningOnBattery = (int(0) <= FPlatformMisc::GetBatteryLevel() && FPlatformMisc::GetBatteryLevel() < 100);
+	const float EnergySavingThreshold = bIsRunningOnBattery ? GEnergySaverTimeThresholdForEnergySavingOnBattery : GEnergySaverTimeThresholdForEnergySavingPluggedIn;
+	const float DisableRenderingThreshold = bIsRunningOnBattery ? GEnergySaverTimeThresholdForDisabledRenderingOnBattery : GEnergySaverTimeThresholdForDisabledRenderingPluggedIn;
 
-	if (FMath::IsNearlyZero(Threshold))
+	bPrevEnergySavingEnabled = bEnergySavingEnabled;
+	bPrevRenderingDisabled = bRenderingDisabled;
+
+	// GetLastUserInteractionTime() sometimes returns inconsistent values which are lower than in the previous frame, that's why the value is not allowed to become lower.
+	// On PS5, make sure to set Slate.Input.MotionFiresUserInteractionEvents to false, otherwise energy saving won't work
+	LastInteractionTime = FMath::Max(FSlateApplication::Get().GetLastUserInteractionTime(), LastInteractionTime);
+	const double TimeSinceLastInteraction = FSlateApplication::Get().GetCurrentTime() - LastInteractionTime;
+
+	if (FMath::IsNearlyZero(EnergySavingThreshold))
 	{
 		bEnergySavingEnabled = false;
 	}
 	else
 	{
-		// GetLastUserInteractionTime() sometimes returns inconsistent values which are lower than in the previous frame, that's why the value is not allowed to become lower.
-		// On PS5, make sure to set Slate.Input.MotionFiresUserInteractionEvents to false, otherwise energy saving won't work
-		LastInteractionTime = FMath::Max(FSlateApplication::Get().GetLastUserInteractionTime(), LastInteractionTime);
+		bEnergySavingEnabled = TimeSinceLastInteraction > EnergySavingThreshold || (GEnergySaverWhenWindowInactive && !FApp::HasFocus());
+	}
 
-		const double TimeSinceLastInteraction = FSlateApplication::Get().GetCurrentTime() - LastInteractionTime;
-		bEnergySavingEnabled = TimeSinceLastInteraction > Threshold || (GEnergySaverWhenWindowInactive && !FApp::HasFocus());
+	if (FMath::IsNearlyZero(DisableRenderingThreshold))
+	{
+		bRenderingDisabled = false;
+	}
+	else
+	{
+
+		bRenderingDisabled = TimeSinceLastInteraction > DisableRenderingThreshold;
+	}
+	
+	if (bRenderingDisabled != bPrevRenderingDisabled)
+	{
+		if (GEngine->GameViewport)
+		{
+			FWorldContext* WorldContext = GEngine->GetWorldContextFromGameViewport(GEngine->GameViewport);
+			if (WorldContext)
+			{
+				if (bRenderingDisabled && bIsEnergySavingAllowed)
+				{
+					bWorldRenderingToRestore = UGameplayStatics::GetEnableWorldRendering(WorldContext->World());
+					UGameplayStatics::SetEnableWorldRendering(WorldContext->World(), false);
+				}
+				else
+				{
+					UGameplayStatics::SetEnableWorldRendering(WorldContext->World(), bWorldRenderingToRestore);
+				}
+			}
+		}
 	}
 
 	if (bEnergySavingEnabled != bPrevEnergySavingEnabled)
