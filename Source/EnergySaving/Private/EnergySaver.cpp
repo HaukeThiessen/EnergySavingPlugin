@@ -1,5 +1,12 @@
 #include "EnergySaver.h"
 #include "Kismet/GameplayStatics.h"
+#include "Framework/Application/SlateApplication.h"
+#include "Engine/Engine.h"
+#include "Misc/App.h"
+
+// The CVars below are supposed to be exposed to the user in your game's settings.
+// If your game is only released on platforms that don't have batteries,
+// feel free to remove the logic to detect batteries and adjust the settings accordingly
 
 float GEnergySaverTimeThresholdForEnergySavingPluggedIn = 30;
 static FAutoConsoleVariableRef CVarEnergySaverTimeThresholdForEnergySavingPluggedIn(
@@ -56,13 +63,11 @@ UEnergySaver::UEnergySaver()
 
 ETickableTickType UEnergySaver::GetTickableTickType() const
 {
-	// If this is a template or has not been initialized yet, set to never tick and it will be enabled when it is initialized
 	if (IsTemplate() || !bInitialized)
 	{
 		return ETickableTickType::Never;
 	}
 
-	// Otherwise default to conditional
 	return ETickableTickType::Conditional;
 }
 
@@ -71,7 +76,6 @@ void UEnergySaver::Initialize(FSubsystemCollectionBase& Collection)
 	check(!bInitialized);
 	bInitialized = true;
 
-	// Refresh the tick type after initialization
 	SetTickableTickType(GetTickableTickType());
 }
 
@@ -80,13 +84,16 @@ void UEnergySaver::Deinitialize()
 	check(bInitialized);
 	bInitialized = false;
 
-	// Always cancel tick as this is about to be destroyed
 	SetTickableTickType(ETickableTickType::Never);
 }
 
 void UEnergySaver::Tick(float DeltaTime)
 {
-	const bool bIsRunningOnBattery = (int(0) <= FPlatformMisc::GetBatteryLevel() && FPlatformMisc::GetBatteryLevel() < 100);
+	const int BatteryLevel = FPlatformMisc::GetBatteryLevel();
+
+	// IsRunningOnBattery() on Windows just returns whether the device has a battery, making it unusable to detect if a laptop is currently not being charged.
+	// Since there is no easy way to check if the battery is being charged, having a battery that is not charged 100% is considered as running on a battery
+	const bool bIsRunningOnBattery = (0 <= BatteryLevel && BatteryLevel < 100);
 	const float EnergySavingThreshold = bIsRunningOnBattery ? GEnergySaverTimeThresholdForEnergySavingOnBattery : GEnergySaverTimeThresholdForEnergySavingPluggedIn;
 	const float DisableRenderingThreshold = bIsRunningOnBattery ? GEnergySaverTimeThresholdForDisabledRenderingOnBattery : GEnergySaverTimeThresholdForDisabledRenderingPluggedIn;
 
@@ -128,6 +135,7 @@ void UEnergySaver::Tick(float DeltaTime)
 				{
 					bWorldRenderingToRestore = UGameplayStatics::GetEnableWorldRendering(WorldContext->World());
 					UGameplayStatics::SetEnableWorldRendering(WorldContext->World(), false);
+					
 				}
 				else
 				{
@@ -139,7 +147,8 @@ void UEnergySaver::Tick(float DeltaTime)
 
 	if (bEnergySavingEnabled != bPrevEnergySavingEnabled)
 	{
-		// With dynamic resolution enabled, use r.DynamicRes.ThrottlingMaxScreenPercentage. Otherwise, use r.screenpercentage (not great, because it can cause a hitch)
+		// With dynamic resolution enabled, use r.DynamicRes.ThrottlingMaxScreenPercentage.
+		// Otherwise, use r.screenpercentage (not great, because it can cause a hitch).
 		static IConsoleVariable* CVarDynamicResOperationMode = IConsoleManager::Get().FindConsoleVariable(TEXT("r.DynamicRes.OperationMode"));
 		const int32 DynamicResOperationMode = CVarDynamicResOperationMode->GetInt();
 
