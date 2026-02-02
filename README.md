@@ -32,8 +32,8 @@ On PS5, make sure to set Slate.Input.MotionFiresUserInteractionEvents to false, 
 The implementation of the energy saving mode leans heavily on [this paper](https://cdn2.unrealengine.com/reducing-fortnites-power-consumption-layout-v03-ffedbeb1adeb.pdf) covering Fortnite's energy saving features, and I recommend checking it out.
 To learn more about the energy saving techniques used in this plugin and other possible improvements, check out [my blog post about the topic](https://haukethiessen.com/developing-games-for-devices-with-batteries/). 
 
-# Requirements
-The plugin requires at least Unreal 5.3 to work on consoles, as that version introduced the cvar **r.DynamicRes.ThrottlingMaxScreenPercentage**. For older engine versions, you can still make the plugin work by replacing it with **r.DynamicRes.MaxScreenPercentage**. On PS5, the plugin won't work with older engine versions because there's no way to disable the motion input not affecting the last interaction time. For more details on this, check out Epic's paper linked above.
+# Version Requirements
+The plugin requires at least Unreal 5.5.
 
 # Further development
 This plugin is still in a very early state, so be aware of that when using it in an actual production context. As of now, I only managed to test the game on PC. Any feedback and bug reports are appreciated.
