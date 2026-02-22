@@ -21,7 +21,7 @@ public:
 
 	// Use this property to disallow energy saving temporarily, i.e. for cutscenes
 	// If energy saving is already enabled, disallowing it won't disable it. 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category=EnergySaving)
 	bool bIsEnergySavingAllowed = true;
 
 private:
