@@ -2,6 +2,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Engine/Engine.h"
+#include "Math/UnrealMathUtility.h"
 #include "Misc/App.h"
 
 // The CVars below are supposed to be exposed to the user in your game's settings.
@@ -22,7 +23,7 @@ static FAutoConsoleVariableRef CVarEnergySaverTimeThresholdForEnergySavingOnBatt
 	TEXT("Idle time threshold at which energy saving kicks in while running on battery (seconds). Set to 0 to disable"),
 	ECVF_Default);
 
-float GEnergySaverTimeThresholdForDisabledRenderingPluggedIn = 300;
+float GEnergySaverTimeThresholdForDisabledRenderingPluggedIn = 120;
 static FAutoConsoleVariableRef CVarEnergySaverTimeThresholdForDisabledRenderingPluggedIn(
 	TEXT("EnergySaver.TimeThresholdForDisabledRendering.PluggedIn"),
 	GEnergySaverTimeThresholdForDisabledRenderingPluggedIn,
@@ -36,14 +37,14 @@ static FAutoConsoleVariableRef CVarEnergySaverTimeThresholdForDisabledRenderingO
 	TEXT("Idle time threshold at which the rendering gets disabled while running on battery (seconds). Set to 0 to disable"),
 	ECVF_Default);
 
-int32 GEnergySaverMaxFps = 30;
+int32 GEnergySaverMaxFps = 33;
 static FAutoConsoleVariableRef CVarEnergySaverMaxFps(
 	TEXT("EnergySaver.MaxFps"),
 	GEnergySaverMaxFps,
 	TEXT("Max FPS for the energy saving mode. Set to 0 to disable"),
 	ECVF_Default);
 
-int32 GEnergySaverMaxScreenPercentage = 50;
+int32 GEnergySaverMaxScreenPercentage = 40;
 static FAutoConsoleVariableRef CVarEnergySaverMaxScreenPercentage(
 	TEXT("EnergySaver.MaxScreenPercentage"),
 	GEnergySaverMaxScreenPercentage,
@@ -61,34 +62,21 @@ UEnergySaver::UEnergySaver()
 {
 }
 
-ETickableTickType UEnergySaver::GetTickableTickType() const
-{
-	if (IsTemplate() || !bInitialized)
-	{
-		return ETickableTickType::Never;
-	}
-
-	return ETickableTickType::Conditional;
-}
-
 void UEnergySaver::Initialize(FSubsystemCollectionBase& Collection)
 {
-	check(!bInitialized);
-	bInitialized = true;
-
-	SetTickableTickType(GetTickableTickType());
+	SetTickableTickType((IsTemplate() || !bInitialized) ? ETickableTickType::Never : ETickableTickType::Always);
+	Super::Initialize(Collection);
 }
 
 void UEnergySaver::Deinitialize()
 {
-	check(bInitialized);
-	bInitialized = false;
-
 	SetTickableTickType(ETickableTickType::Never);
+	Super::Deinitialize();
 }
 
 void UEnergySaver::Tick(float DeltaTime)
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE(UEnergySaver::Tick);
 	const int BatteryLevel = FPlatformMisc::GetBatteryLevel();
 
 	// IsRunningOnBattery() on Windows just returns whether the device has a battery, making it unusable to detect if a laptop is currently not being charged.
@@ -120,71 +108,83 @@ void UEnergySaver::Tick(float DeltaTime)
 	}
 	else
 	{
-
 		bRenderingDisabled = TimeSinceLastInteraction > DisableRenderingThreshold;
 	}
 	
 	if (bRenderingDisabled != bPrevRenderingDisabled)
 	{
-		if (GEngine->GameViewport)
-		{
-			FWorldContext* WorldContext = GEngine->GetWorldContextFromGameViewport(GEngine->GameViewport);
-			if (WorldContext)
-			{
-				if (bRenderingDisabled && bIsEnergySavingAllowed)
-				{
-					bWorldRenderingToRestore = UGameplayStatics::GetEnableWorldRendering(WorldContext->World());
-					UGameplayStatics::SetEnableWorldRendering(WorldContext->World(), false);
-					
-				}
-				else
-				{
-					UGameplayStatics::SetEnableWorldRendering(WorldContext->World(), bWorldRenderingToRestore);
-				}
-			}
-		}
+		SetIsRenderingDisabled(bRenderingDisabled);
 	}
 
 	if (bEnergySavingEnabled != bPrevEnergySavingEnabled)
 	{
-		// With dynamic resolution enabled, use r.DynamicRes.ThrottlingMaxScreenPercentage.
-		// Otherwise, use r.screenpercentage (not great, because it can cause a hitch).
-		static IConsoleVariable* CVarDynamicResOperationMode = IConsoleManager::Get().FindConsoleVariable(TEXT("r.DynamicRes.OperationMode"));
-		const int32 DynamicResOperationMode = CVarDynamicResOperationMode->GetInt();
-
-		static IConsoleVariable* CvarMaxScreenPercentage = DynamicResOperationMode == 0 ?
-			IConsoleManager::Get().FindConsoleVariable(TEXT("r.ScreenPercentage")) :
-			IConsoleManager::Get().FindConsoleVariable(TEXT("r.DynamicRes.ThrottlingMaxScreenPercentage"));
-		static IConsoleVariable* CvarMaxFps = IConsoleManager::Get().FindConsoleVariable(TEXT("t.maxfps"));
-
-		if (bEnergySavingEnabled && bIsEnergySavingAllowed)
-		{
-			if (GEnergySaverMaxScreenPercentage > 0)
-			{
-				MaxScreenPercentageToRestore = CvarMaxScreenPercentage->GetFloat();
-				CvarMaxScreenPercentage->AsVariable()->SetWithCurrentPriority(GEnergySaverMaxScreenPercentage);
-			}
-			if (GEnergySaverMaxFps > 0)
-			{
-				MaxFpsToRestore = CvarMaxFps->GetInt();
-				CvarMaxFps->AsVariable()->SetWithCurrentPriority(GEnergySaverMaxFps);
-			}
-		}
-		else
-		{
-			if (GEnergySaverMaxScreenPercentage > 0)
-			{
-				CvarMaxScreenPercentage->AsVariable()->SetWithCurrentPriority(MaxScreenPercentageToRestore);
-			}
-			if (GEnergySaverMaxFps > 0)
-			{
-				CvarMaxFps->AsVariable()->SetWithCurrentPriority(MaxFpsToRestore);
-			}
-		}
+		SetIsEnergySavingEnabled(bEnergySavingEnabled);
 	}
 }
 
 TStatId UEnergySaver::GetStatId() const
 {
 	return GetStatID();
+}
+
+void UEnergySaver::SetIsEnergySavingEnabled(bool NewIsEnergySavingEnabled)
+{
+	// With dynamic resolution enabled, use r.DynamicRes.ThrottlingMaxScreenPercentage.
+	// Otherwise, use r.screenpercentage (not great, because it can cause a hitch).
+	static IConsoleVariable* CVarDynamicResOperationMode = IConsoleManager::Get().FindConsoleVariable(TEXT("r.DynamicRes.OperationMode"));
+	const int32 DynamicResOperationMode = CVarDynamicResOperationMode->GetInt();
+
+	static IConsoleVariable* CvarMaxScreenPercentage = DynamicResOperationMode == 0 ?
+		IConsoleManager::Get().FindConsoleVariable(TEXT("r.ScreenPercentage")) :
+		IConsoleManager::Get().FindConsoleVariable(TEXT("r.DynamicRes.ThrottlingMaxScreenPercentage"));
+	static IConsoleVariable* CvarMaxFps = IConsoleManager::Get().FindConsoleVariable(TEXT("t.maxfps"));
+
+	if (bEnergySavingEnabled && bIsEnergySavingAllowed)
+	{
+		if (GEnergySaverMaxScreenPercentage > 0)
+		{
+			MaxScreenPercentageToRestore = CvarMaxScreenPercentage->GetFloat();
+			CvarMaxScreenPercentage->AsVariable()->SetWithCurrentPriority(GEnergySaverMaxScreenPercentage);
+		}
+		if (GEnergySaverMaxFps > 0)
+		{
+			MaxFpsToRestore = CvarMaxFps->GetInt();
+			CvarMaxFps->AsVariable()->SetWithCurrentPriority(GEnergySaverMaxFps);
+		}
+		OnEnergySavingEnabled.Broadcast();
+	}
+	else
+	{
+		if (GEnergySaverMaxScreenPercentage > 0)
+		{
+			CvarMaxScreenPercentage->AsVariable()->SetWithCurrentPriority(MaxScreenPercentageToRestore);
+		}
+		if (GEnergySaverMaxFps > 0)
+		{
+			CvarMaxFps->AsVariable()->SetWithCurrentPriority(MaxFpsToRestore);
+		}
+		OnEnergySavingDisabled.Broadcast();
+	}
+}
+
+void UEnergySaver::SetIsRenderingDisabled(bool NewIsRenderingSuspended)
+{
+	if (GEngine->GameViewport)
+	{
+		FWorldContext* WorldContext = GEngine->GetWorldContextFromGameViewport(GEngine->GameViewport);
+		if (WorldContext)
+		{
+			if (bRenderingDisabled && bIsEnergySavingAllowed)
+			{
+				bWorldRenderingToRestore = UGameplayStatics::GetEnableWorldRendering(WorldContext->World());
+				UGameplayStatics::SetEnableWorldRendering(WorldContext->World(), false);
+				OnRenderingDisabled.Broadcast();
+			}
+			else
+			{
+				UGameplayStatics::SetEnableWorldRendering(WorldContext->World(), bWorldRenderingToRestore);
+				OnRenderingEnabled.Broadcast();
+			}
+		}
+	}
 }
