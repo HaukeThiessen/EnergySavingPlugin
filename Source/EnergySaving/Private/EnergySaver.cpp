@@ -37,14 +37,14 @@ static FAutoConsoleVariableRef CVarEnergySaverTimeThresholdForDisabledRenderingO
 	TEXT("Idle time threshold at which the rendering gets disabled while running on battery (seconds). Set to 0 to disable"),
 	ECVF_Default);
 
-int32 GEnergySaverMaxFps = 33;
+int32 GEnergySaverMaxFps = 30;
 static FAutoConsoleVariableRef CVarEnergySaverMaxFps(
 	TEXT("EnergySaver.MaxFps"),
 	GEnergySaverMaxFps,
 	TEXT("Max FPS for the energy saving mode. Set to 0 to disable"),
 	ECVF_Default);
 
-int32 GEnergySaverMaxScreenPercentage = 40;
+int32 GEnergySaverMaxScreenPercentage = 33;
 static FAutoConsoleVariableRef CVarEnergySaverMaxScreenPercentage(
 	TEXT("EnergySaver.MaxScreenPercentage"),
 	GEnergySaverMaxScreenPercentage,
