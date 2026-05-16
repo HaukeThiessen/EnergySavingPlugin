@@ -28,10 +28,6 @@ This property should only be used for temporary overrides. When giving the playe
 When reducing the screen percentage, the plugin tries to use Unreal's dynamic resolution feature, which is only available on consoles. On PCs, the screen percentage is set directly, which can result in small hitches, but that shouldn't be an issue as the setting is not adjusted every frame, but only once, and usually in a situation when the player isn't playing the game anyway.
 On PS5, make sure to set Slate.Input.MotionFiresUserInteractionEvents to false, otherwise the plugin won't work. 
 
-# Sources and further reading
-The implementation of the energy saving mode leans heavily on [this paper](https://cdn2.unrealengine.com/reducing-fortnites-power-consumption-layout-v03-ffedbeb1adeb.pdf) covering Fortnite's energy saving features, and I recommend checking it out.
-To learn more about the energy saving techniques used in this plugin and other possible improvements, check out [my blog post about the topic](https://haukethiessen.com/developing-games-for-devices-with-batteries/). 
-
 # Version Requirements
 The plugin requires at least Unreal 5.5.
 
@@ -49,3 +45,15 @@ This plugin is free to use in commercial and non-commercial products.
 This software is provided 'as-is', without any express or implied warranty. In no event will the authors be held liable for any damages arising from the use of this software.
 Permission is granted to anyone to use this software for any purpose, including commercial applications, and to alter it and redistribute it freely.
 Attribution is appreciated, but not required.
+
+# Sources and further reading
+The implementation of the energy saving mode leans heavily on [this paper](https://cdn2.unrealengine.com/reducing-fortnites-power-consumption-layout-v03-ffedbeb1adeb.pdf) covering Fortnite's energy saving features, and I recommend checking it out.
+To learn more about the energy saving techniques used in this plugin and other possible improvements, check out [my blog post about the topic](https://haukethiessen.com/developing-games-for-devices-with-batteries/). 
+
+# Similar plguins
+If you like what this plugin is doing, but your engine of choice isn't Unreal, please check out:
+
+[The Unity Energy Saver](https://github.com/wtfoliver/UnityEnergySaver) by Oliver Stock
+
+[The Godot Energy Saver Addon](https://github.com/BoldBeetleGames/energy-saver-addon) by Bold Beetle Games
+
